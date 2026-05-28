@@ -51,6 +51,13 @@
   }
 }
 
+.xxFlag {
+  height: 24px;
+  width: 24px;
+  display: block;
+  flex: 0 0 24px;
+}
+
 :global {
   .react-international-phone-country-selector-dropdown {
     outline: none;

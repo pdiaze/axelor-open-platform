@@ -356,11 +356,15 @@ export function Phone({
                 }}
                 disabled={readonly}
               >
-                <FlagImage
-                  iso2={countryIso2}
-                  src={flags}
-                  className={styles.flag}
-                />
+                {noPrefix ? (
+                  <XxFlag className={styles.xxFlag} />
+                ) : (
+                  <FlagImage
+                    iso2={countryIso2}
+                    src={flags}
+                    className={styles.flag}
+                  />
+                )}
                 {!readonly && (
                   <Icon
                     icon={`arrow_drop_${showDropdown ? "up" : "down"}`}
@@ -380,7 +384,11 @@ export function Phone({
                     show={showDropdown}
                     selectedCountry={countryIso2}
                     onSelect={(country) => {
-                      if (country.iso2 !== countryIso2) {
+                      // In no-prefix mode, the dropdown may highlight the
+                      // current/default country even though the value is still
+                      // country-unspecified (XX), so selecting it must still
+                      // apply the country and update the flag.
+                      if (noPrefix || country.iso2 !== countryIso2) {
                         setValue(null);
                         setCountry(country.iso2);
                       }
@@ -446,5 +454,51 @@ export function Phone({
         )}
       </Box>
     </FieldControl>
+  );
+}
+
+function XxFlag({ className }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      className={className}
+      aria-hidden="true"
+      focusable="false"
+    >
+      <defs>
+        <clipPath id="xx-flag-clip">
+          <rect x=".5" y="4" width="23" height="16" rx="1.75" />
+        </clipPath>
+      </defs>
+      <rect
+        x=".5"
+        y="4"
+        width="23"
+        height="16"
+        rx="1.75"
+        fill="var(--bs-secondary-bg)"
+        stroke="var(--bs-secondary-color)"
+        strokeWidth="1"
+      />
+      <line
+        x1=".5"
+        y1="4"
+        x2="23.5"
+        y2="20"
+        stroke="var(--bs-secondary-color)"
+        strokeWidth="1"
+        clipPath="url(#xx-flag-clip)"
+      />
+      <line
+        x1="23.5"
+        y1="4"
+        x2=".5"
+        y2="20"
+        stroke="var(--bs-secondary-color)"
+        strokeWidth="1"
+        clipPath="url(#xx-flag-clip)"
+      />
+    </svg>
   );
 }

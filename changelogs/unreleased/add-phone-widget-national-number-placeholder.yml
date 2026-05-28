@@ -1,0 +1,12 @@
+---
+title: Add national phone number placeholder flag for phone widget
+type: feature
+description: |
+  Phone numbers stored without a country prefix (national format, legacy data) now
+  display an "XX" placeholder flag — a rounded rectangle with two diagonal crossing
+  lines — instead of the default locale country flag, making it clear that the
+  country is unspecified.
+
+  The flag uses theme CSS variables so it renders correctly in both light and dark
+  mode. Selecting any country from the dropdown while in XX mode exits national
+  format and converts the value to international format.
