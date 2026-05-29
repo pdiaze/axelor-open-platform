@@ -15,6 +15,7 @@ import {
   CountrySelectorDropdown,
   FlagImage,
   getActiveFormattingMask,
+  ParsedCountry,
   usePhoneInput,
 } from "react-international-phone";
 
@@ -131,6 +132,16 @@ export function Phone({
     return countries;
   }, [onlyCountries]);
 
+  const handlePhoneChange = useCallback(
+    ({ phone, country }: { phone: string; country: ParsedCountry }) => {
+      // If case of only dial code, set empty value instead.
+      onChange({
+        target: { value: phone !== `+${country.dialCode}` ? phone : "" },
+      } as ChangeEvent<HTMLInputElement>);
+    },
+    [onChange],
+  );
+
   const {
     inputValue,
     phone,
@@ -142,15 +153,10 @@ export function Phone({
     defaultCountry,
     countries: countries,
     value: text,
-    onChange: ({ phone, country }) => {
-      // If case of only dial code, set empty value instead.
-      onChange({
-        target: { value: phone !== `+${country.dialCode}` ? phone : "" },
-      } as ChangeEvent<HTMLInputElement>);
-    },
+    onChange: handlePhoneChange,
     disableDialCodeAndPrefix: noPrefix,
   });
-  const pendingInternationalPasteRef = useRef<string | null>(null);
+  const pendingInternationalPhoneRef = useRef<string | null>(null);
 
   const applyPhoneInputValue = useCallback(
     (value: string, data: string = value, selectionStart = value.length) => {
@@ -164,11 +170,11 @@ export function Phone({
   );
 
   useEffect(() => {
-    if (noPrefix || !pendingInternationalPasteRef.current) return;
+    if (noPrefix || !pendingInternationalPhoneRef.current) return;
 
-    const pastedPhone = pendingInternationalPasteRef.current;
-    pendingInternationalPasteRef.current = null;
-    applyPhoneInputValue(pastedPhone);
+    const pendingPhone = pendingInternationalPhoneRef.current;
+    pendingInternationalPhoneRef.current = null;
+    applyPhoneInputValue(pendingPhone);
   }, [applyPhoneInputValue, noPrefix]);
 
   // If case of only dial code, set empty value instead.
@@ -255,13 +261,18 @@ export function Phone({
   const hasValue = !!text && text === phone;
   const showButton = hasValue || !readonly;
 
-  const [isPossibleNumber, setIsPossibleNumber] = useState<boolean>(false);
-  const [numberType, setNumberType] = useState<string | undefined>(undefined);
+  const [{ isPossible: isPossibleNumber, numberType }, setPhoneInfo] = useState<{
+    isPossible: boolean;
+    numberType: string | undefined;
+  }>({ isPossible: false, numberType: undefined });
+
 
   useAsyncEffect(async () => {
     const phoneNumber = await getPhoneInfo(phone);
-    setIsPossibleNumber(phoneNumber.isPossible());
-    setNumberType(phoneNumber.getDisplayType());
+    setPhoneInfo({
+      isPossible: phoneNumber.isPossible(),
+      numberType: phoneNumber.getDisplayType(),
+    });
   }, [phone]);
 
   const handleOpenPhoneLink = useCallback(() => {
@@ -322,7 +333,7 @@ export function Phone({
       // the + prefix. useInput's onChange only commits on blur, so write to
       // the value atom directly to immediately leave no-prefix mode.
       if (noPrefix) {
-        pendingInternationalPasteRef.current = normalized.phone;
+        pendingInternationalPhoneRef.current = normalized.phone;
         setValue(normalized.phone, true);
         return;
       }
@@ -338,6 +349,37 @@ export function Phone({
       onlyCountries,
     ],
   );
+
+  const handleCountrySelect = useCallback(
+    (country: ParsedCountry) => {
+      // In no-prefix mode, the dropdown may highlight the
+      // current/default country even though the value is still
+      // country-unspecified (XX), so selecting it must still
+      // apply the country without dropping the national digits.
+      if (noPrefix) {
+        const digits = inputValue.replace(/\D/g, "");
+        const nationalDigits = digits.startsWith(country.dialCode)
+          ? digits.slice(country.dialCode.length)
+          : digits;
+        const nextPhone = `+${country.dialCode}${nationalDigits}`;
+
+        pendingInternationalPhoneRef.current = nextPhone;
+        setValue(nextPhone, true);
+      } else if (country.iso2 !== countryIso2) {
+        setValue(null);
+        setCountry(country.iso2);
+      }
+      setShowDropdown(false);
+      inputRef.current?.focus();
+    },
+    [countryIso2, inputRef, inputValue, noPrefix, setCountry, setValue],
+  );
+
+  const handleDropdownClose = useCallback(() => {
+    if (new Date().getTime() - toggleTimeRef.current > 200) {
+      setTimeout(() => setShowDropdown(false), 100);
+    }
+  }, []);
 
   return (
     <FieldControl {...props} className={styles.container}>
@@ -383,23 +425,8 @@ export function Phone({
                   <CountrySelectorDropdown
                     show={showDropdown}
                     selectedCountry={countryIso2}
-                    onSelect={(country) => {
-                      // In no-prefix mode, the dropdown may highlight the
-                      // current/default country even though the value is still
-                      // country-unspecified (XX), so selecting it must still
-                      // apply the country and update the flag.
-                      if (noPrefix || country.iso2 !== countryIso2) {
-                        setValue(null);
-                        setCountry(country.iso2);
-                      }
-                      setShowDropdown(false);
-                      inputRef.current?.focus();
-                    }}
-                    onClose={() => {
-                      if (new Date().getTime() - toggleTimeRef.current > 200) {
-                        setTimeout(() => setShowDropdown(false), 100);
-                      }
-                    }}
+                    onSelect={handleCountrySelect}
+                    onClose={handleDropdownClose}
                     preferredCountries={preferredCountries}
                     countries={countries}
                     flags={FLAGS}
