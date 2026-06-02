@@ -41,6 +41,11 @@ import "react-international-phone/style.css";
 import flags from "@/assets/flags.svg";
 import styles from "./phone.module.scss";
 
+const digitsOnly = (value: string) => value.replace(/\D/g, "");
+const trimTrunkPrefix = (value: string) => value.replace(/^0+/, "");
+const stripDialCode = (value: string, dialCode: string) =>
+  value.startsWith(dialCode) ? value.slice(dialCode.length) : value;
+
 export function Phone({
   inputProps,
   ...props
@@ -114,6 +119,30 @@ export function Phone({
     return noPrefix ? _text.replace(/^0/, "") : _text;
   }, [_text, noPrefix]);
 
+  const getEffectiveValue = useCallback(
+    (phone: string, country: ParsedCountry, inputValue: string = phone) => {
+      const newValue = phone !== `+${country.dialCode}` ? phone : "";
+      const storedValue = String(value ?? "");
+
+      if (noPrefix) {
+        const nationalDigits = stripDialCode(
+          digitsOnly(newValue),
+          country.dialCode,
+        );
+        const unchanged =
+          trimTrunkPrefix(nationalDigits) ===
+          trimTrunkPrefix(digitsOnly(storedValue));
+
+        return unchanged ? storedValue : inputValue;
+      }
+
+      return digitsOnly(newValue) === digitsOnly(storedValue)
+        ? storedValue
+        : newValue;
+    },
+    [noPrefix, value],
+  );
+
   const countries = useMemo(() => {
     // Filter out countries that are not in `onlyCountries`, if specified.
     let countries = onlyCountries.length
@@ -133,13 +162,21 @@ export function Phone({
   }, [onlyCountries]);
 
   const handlePhoneChange = useCallback(
-    ({ phone, country }: { phone: string; country: ParsedCountry }) => {
-      // If case of only dial code, set empty value instead.
+    ({
+      phone,
+      country,
+      inputValue,
+    }: {
+      phone: string;
+      country: ParsedCountry;
+      inputValue: string;
+    }) => {
+      // Keep stored values stable when the library only changes formatting.
       onChange({
-        target: { value: phone !== `+${country.dialCode}` ? phone : "" },
+        target: { value: getEffectiveValue(phone, country, inputValue) },
       } as ChangeEvent<HTMLInputElement>);
     },
-    [onChange],
+    [getEffectiveValue, onChange],
   );
 
   const {
@@ -180,9 +217,9 @@ export function Phone({
   // If case of only dial code, set empty value instead.
   const onBlur = useCallback(() => {
     _onBlur({
-      target: { value: phone !== `+${country.dialCode}` ? phone : "" },
+      target: { value: getEffectiveValue(phone, country, inputValue) },
     } as FocusEvent<HTMLInputElement>);
-  }, [_onBlur, country.dialCode, phone]);
+  }, [_onBlur, country, getEffectiveValue, inputValue, phone]);
 
   const { id: routeId } = useViewRoute();
   const routeIdRef = useRef(routeId);
