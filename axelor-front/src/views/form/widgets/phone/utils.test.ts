@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import { normalizePastedPhoneValue } from "./utils";
+import { getPhoneInfo, normalizePastedPhoneValue } from "./utils";
+
+describe("getPhoneInfo", () => {
+  it("parses national numbers with a country hint", async () => {
+    const phoneNumber = await getPhoneInfo("9876543210", "in");
+
+    expect(phoneNumber.isPossible()).toBe(true);
+  });
+});
 
 describe("normalizePastedPhoneValue", () => {
   it("normalizes a French national number with trunk prefix", async () => {

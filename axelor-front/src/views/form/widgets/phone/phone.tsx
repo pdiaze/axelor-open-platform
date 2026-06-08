@@ -41,11 +41,6 @@ import "react-international-phone/style.css";
 import flags from "@/assets/flags.svg";
 import styles from "./phone.module.scss";
 
-const digitsOnly = (value: string) => value.replace(/\D/g, "");
-const trimTrunkPrefix = (value: string) => value.replace(/^0+/, "");
-const stripDialCode = (value: string, dialCode: string) =>
-  value.startsWith(dialCode) ? value.slice(dialCode.length) : value;
-
 export function Phone({
   inputProps,
   ...props
@@ -103,7 +98,6 @@ export function Phone({
   }, [_preferredCountries, defaultCountry, onlyCountries]);
 
   const value = useAtomValue(valueAtom);
-  const noPrefix = !!value && !value.startsWith("+");
 
   const {
     text: _text,
@@ -115,33 +109,8 @@ export function Phone({
     schema,
   });
 
-  const text = useMemo(() => {
-    return noPrefix ? _text.replace(/^0/, "") : _text;
-  }, [_text, noPrefix]);
-
-  const getEffectiveValue = useCallback(
-    (phone: string, country: ParsedCountry, inputValue: string = phone) => {
-      const newValue = phone !== `+${country.dialCode}` ? phone : "";
-      const storedValue = String(value ?? "");
-
-      if (noPrefix) {
-        const nationalDigits = stripDialCode(
-          digitsOnly(newValue),
-          country.dialCode,
-        );
-        const unchanged =
-          trimTrunkPrefix(nationalDigits) ===
-          trimTrunkPrefix(digitsOnly(storedValue));
-
-        return unchanged ? storedValue : inputValue;
-      }
-
-      return digitsOnly(newValue) === digitsOnly(storedValue)
-        ? storedValue
-        : newValue;
-    },
-    [noPrefix, value],
-  );
+  const text = _text;
+  const noPrefix = !!text && !text.startsWith("+");
 
   const countries = useMemo(() => {
     // Filter out countries that are not in `onlyCountries`, if specified.
@@ -161,22 +130,34 @@ export function Phone({
     return countries;
   }, [onlyCountries]);
 
+  const selectedDialCodeRef = useRef<string>(undefined);
+
   const handlePhoneChange = useCallback(
-    ({
-      phone,
-      country,
-      inputValue,
-    }: {
-      phone: string;
-      country: ParsedCountry;
-      inputValue: string;
-    }) => {
-      // Keep stored values stable when the library only changes formatting.
+    ({ phone, country }: { phone: string; country: ParsedCountry }) => {
+      if (noPrefix) return;
+      const dialCode = `+${country.dialCode}`;
+      const selectedDialCode = selectedDialCodeRef.current;
+      if (selectedDialCode === phone) {
+        selectedDialCodeRef.current = undefined;
+      }
       onChange({
-        target: { value: getEffectiveValue(phone, country, inputValue) },
+        target: {
+          value: phone !== dialCode || selectedDialCode === phone ? phone : "",
+        },
       } as ChangeEvent<HTMLInputElement>);
     },
-    [getEffectiveValue, onChange],
+    [noPrefix, onChange],
+  );
+
+  const handleNationalChange = useCallback(
+    (e: ChangeEvent<HTMLInputElement>) => {
+      const sanitized = e.target.value.replace(/[^\d\s+\-().]/g, "");
+      onChange({
+        ...e,
+        target: { ...e.target, value: sanitized },
+      } as ChangeEvent<HTMLInputElement>);
+    },
+    [onChange],
   );
 
   const {
@@ -189,12 +170,9 @@ export function Phone({
   } = usePhoneInput({
     defaultCountry,
     countries: countries,
-    value: text,
+    value: noPrefix ? "" : text,
     onChange: handlePhoneChange,
-    disableDialCodeAndPrefix: noPrefix,
   });
-  const pendingInternationalPhoneRef = useRef<string | null>(null);
-
   const applyPhoneInputValue = useCallback(
     (value: string, data: string = value, selectionStart = value.length) => {
       handlePhoneValueChange({
@@ -206,20 +184,12 @@ export function Phone({
     [handlePhoneValueChange],
   );
 
-  useEffect(() => {
-    if (noPrefix || !pendingInternationalPhoneRef.current) return;
-
-    const pendingPhone = pendingInternationalPhoneRef.current;
-    pendingInternationalPhoneRef.current = null;
-    applyPhoneInputValue(pendingPhone);
-  }, [applyPhoneInputValue, noPrefix]);
-
-  // If case of only dial code, set empty value instead.
   const onBlur = useCallback(() => {
+    const dialCode = `+${country.dialCode}`;
     _onBlur({
-      target: { value: getEffectiveValue(phone, country, inputValue) },
+      target: { value: phone !== dialCode || text === phone ? phone : "" },
     } as FocusEvent<HTMLInputElement>);
-  }, [_onBlur, country, getEffectiveValue, inputValue, phone]);
+  }, [_onBlur, country.dialCode, phone, text]);
 
   const { id: routeId } = useViewRoute();
   const routeIdRef = useRef(routeId);
@@ -295,7 +265,7 @@ export function Phone({
       : iso2;
   }, [country, defaultCountry, onlyCountries]);
 
-  const hasValue = !!text && text === phone;
+  const hasValue = noPrefix ? !!_text : !!text && text === phone;
   const showButton = hasValue || !readonly;
 
   const [{ isPossible: isPossibleNumber, numberType }, setPhoneInfo] = useState<{
@@ -303,14 +273,16 @@ export function Phone({
     numberType: string | undefined;
   }>({ isPossible: false, numberType: undefined });
 
-
   useAsyncEffect(async () => {
-    const phoneNumber = await getPhoneInfo(phone);
+    const phoneNumber = await getPhoneInfo(
+      noPrefix ? _text : phone,
+      noPrefix ? countryIso2 : undefined,
+    );
     setPhoneInfo({
       isPossible: phoneNumber.isPossible(),
       numberType: phoneNumber.getDisplayType(),
     });
-  }, [phone]);
+  }, [_text, countryIso2, noPrefix, phone]);
 
   const handleOpenPhoneLink = useCallback(() => {
     window.open(
@@ -365,12 +337,7 @@ export function Phone({
         return;
       }
 
-      // When pasting an international number (+XX...) into a no-prefix field,
-      // bypass handlePhoneValueChange because disableDialCodeAndPrefix strips
-      // the + prefix. useInput's onChange only commits on blur, so write to
-      // the value atom directly to immediately leave no-prefix mode.
       if (noPrefix) {
-        pendingInternationalPhoneRef.current = normalized.phone;
         setValue(normalized.phone, true);
         return;
       }
@@ -389,27 +356,19 @@ export function Phone({
 
   const handleCountrySelect = useCallback(
     (country: ParsedCountry) => {
-      // In no-prefix mode, the dropdown may highlight the
-      // current/default country even though the value is still
-      // country-unspecified (XX), so selecting it must still
-      // apply the country without dropping the national digits.
       if (noPrefix) {
-        const digits = inputValue.replace(/\D/g, "");
-        const nationalDigits = digits.startsWith(country.dialCode)
-          ? digits.slice(country.dialCode.length)
-          : digits;
-        const nextPhone = `+${country.dialCode}${nationalDigits}`;
-
-        pendingInternationalPhoneRef.current = nextPhone;
-        setValue(nextPhone, true);
+        const digits = _text.replace(/\D/g, "");
+        const national = digits.replace(/^0+/, "");
+        setValue(`+${country.dialCode}${national}`, true);
       } else if (country.iso2 !== countryIso2) {
-        setValue(null);
+        selectedDialCodeRef.current = `+${country.dialCode}`;
+        setValue(selectedDialCodeRef.current, true);
         setCountry(country.iso2);
       }
       setShowDropdown(false);
       inputRef.current?.focus();
     },
-    [countryIso2, inputRef, inputValue, noPrefix, setCountry, setValue],
+    [_text, countryIso2, inputRef, noPrefix, setCountry, setValue],
   );
 
   const handleDropdownClose = useCallback(() => {
@@ -480,7 +439,7 @@ export function Phone({
             className={styles.link}
             title={numberType}
           >
-            {hasValue && inputValue}
+            {hasValue && (noPrefix ? _text : inputValue)}
           </TextLink>
         ) : (
           <Box className={styles.inputWrapper}>
@@ -492,13 +451,13 @@ export function Phone({
               id={uid}
               autoFocus={focus}
               placeholder={placeholder}
-              value={inputValue}
+              value={noPrefix ? _text : inputValue}
               invalid={invalid}
               required={required}
               onKeyDown={onKeyDown}
-              onChange={handlePhoneValueChange}
+              onChange={noPrefix ? handleNationalChange : handlePhoneValueChange}
               onPaste={handlePaste}
-              onBlur={onBlur}
+              onBlur={noPrefix ? _onBlur : onBlur}
               title={numberType}
               className={clsx(styles.input, {
                 [styles.warning]: !invalid && hasValue && !isPossibleNumber,

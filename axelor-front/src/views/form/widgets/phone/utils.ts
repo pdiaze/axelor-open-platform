@@ -53,8 +53,8 @@ const NUMBER_TYPES: Record<string, () => string> = {
   UNKNOWN: () => i18n.get("Unknown"),
 };
 
-export async function getPhoneInfo(phone?: string) {
-  const phoneNumber = await parse(phone ?? "");
+export async function getPhoneInfo(phone?: string, countryIso2?: string) {
+  const phoneNumber = await parse(phone ?? "", getCountryCode(countryIso2));
   return {
     isPossible: () => phoneNumber?.isPossible() ?? false,
     isValid: () => phoneNumber?.isValid() ?? false,
