@@ -125,6 +125,14 @@ export function ManyToOne(
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [isSelectorOpen, setIsSelectorOpen] = useState(false);
 
+  const related = useFieldRelated({ field: schema });
+  const { updateRelated, valueRef } = useEnsureRelated({
+    field: schema,
+    formAtom,
+    valueAtom,
+    related,
+  });
+
   const handleEdit = useCallback(
     async (readonly = false, record?: DataContext) => {
       const $record = record ?? value;
@@ -147,6 +155,7 @@ export function ManyToOne(
         context: {
           _parent: getContext(),
         },
+        additionalFields: related,
         onSelect: handleChange,
         onClose: () => {
           setIsEditorOpen(false);
@@ -166,6 +175,7 @@ export function ManyToOne(
       getContext,
       handleChange,
       jsonModel,
+      related,
     ],
   );
 
@@ -201,14 +211,6 @@ export function ManyToOne(
     getContext,
   );
 
-  const related = useFieldRelated({ field: schema });
-  const { ensureRelated, updateRelated, valueRef } = useEnsureRelated({
-    field: schema,
-    formAtom,
-    valueAtom,
-    related,
-  });
-
   const showSelect = useCallback(async () => {
     const _domain = await beforeSelect(domain, true);
     const _domainContext = _domain ? getContext() : {};
@@ -224,33 +226,18 @@ export function ManyToOne(
       domain: _domain,
       context: _domainContext,
       limit: searchLimit,
+      additionalFields: related,
       ...(canNew && {
         onCreate: () => showCreate(""),
       }),
-      onSelect: async (records) => {
-        const value = await ensureRelated(records[0]);
-        handleChange(value);
+      onSelect: (records) => {
+        handleChange(records[0]);
       },
       onClose: () => {
         setIsSelectorOpen(false);
       },
     });
-  }, [
-    beforeSelect,
-    domain,
-    getContext,
-    showSelector,
-    selectorId,
-    target,
-    gridView,
-    sortBy,
-    schema,
-    searchLimit,
-    canNew,
-    showCreate,
-    ensureRelated,
-    handleChange,
-  ]);
+  }, [beforeSelect, domain, getContext, showSelector, selectorId, target, jsonModel, gridView, sortBy, schema, searchLimit, related, canNew, showCreate, handleChange]);
 
   const fetchOptions = useCallback(
     async (text: string, signal?: AbortSignal) => {

@@ -217,6 +217,7 @@ export function Tags(props: FieldProps<any>) {
         context: {
           _parent: getContext(),
         },
+        additionalFields: [targetName, ...fetchFields].filter(Boolean),
         onSelect: handleSelect,
       });
     },
@@ -231,6 +232,8 @@ export function Tags(props: FieldProps<any>) {
       schema,
       getContext,
       handleSelect,
+      targetName,
+      fetchFields,
     ],
   );
 
@@ -271,10 +274,11 @@ export function Tags(props: FieldProps<any>) {
       domain: _domain,
       context: _domainContext,
       limit: searchLimit,
+      additionalFields: [targetName, ...fetchFields].filter(Boolean),
       ...(canNew && {
         onCreate: () => showCreate(""),
       }),
-      onSelect: async (records = []) => {
+      onSelect: (records = []) => {
         const all = Array.isArray(value) ? value : [];
         const add = records.filter((x) => !all.some((a) => a.id === x.id));
         handleChange([...all, ...add]);
@@ -292,6 +296,8 @@ export function Tags(props: FieldProps<any>) {
     sortBy,
     schema,
     searchLimit,
+    targetName,
+    fetchFields,
     value,
     handleChange,
   ]);
