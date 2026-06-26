@@ -1268,8 +1268,6 @@ function OneToManyInner({
       getContext,
       isManyToMany,
       isCollectionTree,
-      schema.jsonTarget,
-      schema.jsonModel,
       columnNames,
     ],
   );
@@ -1395,10 +1393,12 @@ function OneToManyInner({
   const onSelect = useCallback(async () => {
     const _domain = await beforeSelect(domain, true);
     const _domainContext = _domain ? getContext() : {};
+    const jsonModel = schema.jsonTarget || schema.jsonModel;
     setIsSelectorOpen(true);
     showSelector({
       id: selectorId,
       model,
+      jsonModel,
       multiple: true,
       maximize: isPopupMaximized(schema, "selector"),
       viewName: gridView,

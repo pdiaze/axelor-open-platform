@@ -80,7 +80,7 @@ export function useSelector() {
       title: tabTitle,
       model,
       viewType: "grid",
-      views: [{ type: "grid", name: viewName, ...gridView }],
+      views: [{ type: "grid", name: viewName, ...gridView, jsonModel }],
       params: {
         limit,
         orderBy,

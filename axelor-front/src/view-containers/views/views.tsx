@@ -73,8 +73,8 @@ function ViewContainer({
       loadView({
         context: { ...getDashletContext(tab.action), ...context },
         model,
-        jsonModel: context?.jsonModel,
         ...view,
+        jsonModel: view.jsonModel ?? context?.jsonModel,
       }),
     [model, view, context],
   );

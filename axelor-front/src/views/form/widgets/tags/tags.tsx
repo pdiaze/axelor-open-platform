@@ -51,6 +51,7 @@ export function Tags(props: FieldProps<any>) {
 
   const isManyToMany =
     toKebabCase(schema.serverType || schema.widget) === "many-to-many";
+  const jsonModel = schema.jsonTarget || schema.jsonModel;
 
   const [value, setValue] = useAtom(valueAtom);
   const [hasSearchMore, setSearchMore] = useState(false);
@@ -267,6 +268,7 @@ export function Tags(props: FieldProps<any>) {
     const _domainContext = _domain ? getContext() : {};
     showSelector({
       model: target,
+      jsonModel,
       viewName: gridView,
       orderBy: sortBy,
       multiple: true,
@@ -292,6 +294,7 @@ export function Tags(props: FieldProps<any>) {
     showCreate,
     showSelector,
     target,
+    jsonModel,
     gridView,
     sortBy,
     schema,
