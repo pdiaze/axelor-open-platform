@@ -172,6 +172,7 @@ export function Phone({
     countries: countries,
     value: noPrefix ? "" : text,
     onChange: handlePhoneChange,
+    disableDialCodePrefill: true,
   });
   const applyPhoneInputValue = useCallback(
     (value: string, data: string = value, selectionStart = value.length) => {

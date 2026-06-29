@@ -34,6 +34,7 @@ export function Phone(props: GridColumnProps) {
     value: text,
     defaultCountry,
     disableDialCodeAndPrefix: noPrefix,
+    disableDialCodePrefill: true,
   });
 
   const { iso2 } = country;
