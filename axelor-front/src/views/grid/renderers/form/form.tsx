@@ -50,6 +50,7 @@ import {
   useFormHandlers,
 } from "@/views/form/builder";
 import { fallbackFormAtom } from "@/views/form/builder/atoms";
+import { compactM2MValues } from "@/views/form/builder/utils";
 import { FormOverlayProvider } from "@/views/form/builder/overlay-scope";
 import { isDatePickerTarget } from "@/views/form/widgets/date/utils";
 import {
@@ -516,7 +517,7 @@ export const Form = forwardRef<GridFormHandler, GridFormRendererProps>(
 
           return await onSave?.(
             {
-              ...formState.record,
+              ...compactM2MValues(formState.record, formState.meta),
               _dirty: formState.dirty,
               ...(isTreeGrid && {
                 ...(isLastRow &&
