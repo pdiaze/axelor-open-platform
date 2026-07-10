@@ -358,7 +358,7 @@
 "Light Green","Vert clair",,
 "Lime","Vert citron",,
 "Link","Lien",,
-"List of devices that have logged into your account. Revoke any sessions that you do not recognize.","Liste des appareils qui se sont connectés à votre compte. Révoquer les sessions que vous ne reconnaissez pas.",,
+"List of devices that have logged into your account. Revoke any sessions that you do not recognize.","Liste des appareils qui se sont connectés à votre compte. Révoquez les sessions que vous ne reconnaissez pas.",,
 "Login","Identifiant",,
 "Low","Bas",,
 "MFA_EMAIL_BODY","<p>Bonjour, {0}</p><p>{1}</p><p><strong>{2}</strong></p><p>Ce code expirera dans {3} minutes.</p><p>Si vous n’êtes pas à l’origine de cette demande, nous vous recommandons de changer votre mot de passe et de contacter votre administrateur immédiatement.</p><p>Cordialement,</p>",,
