@@ -1084,7 +1084,7 @@ function OneToManyInner({
             nextItems.map((x) => x[orderField]),
           )
         ) {
-          set(valueAtom, (refs.current.value = nextItems));
+          set(valueAtom, (refs.current.value = nextItems), false, false);
           setRecords((prevRecords) =>
             nextItems.map((item) =>
               nestedToDotted({
