@@ -13,8 +13,12 @@ import { useDataStore } from "@/hooks/use-data-store";
 import { DataStore } from "@/services/client/data-store";
 import { SearchResult } from "@/services/client/data";
 import { i18n } from "@/services/client/i18n";
-import { getDefaultMaxPerPage } from "@/utils/app-settings.ts";
+import {
+  getDefaultMaxPerPage,
+  getDefaultPageSize,
+} from "@/utils/app-settings.ts";
 
+import { resolvePageSize } from "./utils";
 import styles from "./page-text.module.scss";
 
 export function PageText({
@@ -25,10 +29,11 @@ export function PageText({
   onResult?: (result: SearchResult) => void;
 }) {
   const page = useDataStore(dataStore, (state) => state.page);
-  const maxLimit = getDefaultMaxPerPage();
+  const defaultPageSize = getDefaultPageSize();
+  const maxPageSize = getDefaultMaxPerPage();
   const { offset = 0, totalCount = 0 } = page;
   const [showEditor, setShowEditor] = useState(false);
-  const limit = page.limit ?? maxLimit;
+  const limit = page.limit ?? defaultPageSize;
   const [userPageSize, setUserPageSize] = useState(limit);
 
   const onChange = useCallback<React.ChangeEventHandler<HTMLInputElement>>(
@@ -43,17 +48,13 @@ export function PageText({
   const onApply = useCallback(
     (e: FormEvent<HTMLFormElement>) => {
       e.preventDefault();
-      let size = userPageSize;
-      if (
-        getDefaultMaxPerPage() > 0 &&
-        (userPageSize == 0 || userPageSize > getDefaultMaxPerPage())
-      ) {
-        size = getDefaultMaxPerPage();
-        setUserPageSize(getDefaultMaxPerPage());
+      const size = resolvePageSize(userPageSize, maxPageSize, limit);
+      if (maxPageSize >= 1 && userPageSize > maxPageSize) {
         alerts.warn({
           message: i18n.get("Page size limited to {0} records", size),
         });
       }
+      setUserPageSize(size);
       dataStore
         .search({
           limit: size,
@@ -64,7 +65,7 @@ export function PageText({
         .then(onResult);
       setShowEditor(false);
     },
-    [dataStore, currentPage, onResult, userPageSize],
+    [userPageSize, maxPageSize, limit, dataStore, currentPage, onResult],
   );
 
   const handleKeyDown = useCallback(
@@ -90,11 +91,13 @@ export function PageText({
         className={styles.editor}
         onSubmit={onApply}
         onKeyDown={handleKeyDown}
+        noValidate
         data-testid={"page-limit-form"}
       >
         <Input
           name="limit"
           type="number"
+          min={1}
           value={userPageSize}
           onChange={onChange}
           onFocus={(e) => e.target.select()}
