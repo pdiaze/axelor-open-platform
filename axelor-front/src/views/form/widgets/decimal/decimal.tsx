@@ -9,6 +9,7 @@ import { i18n } from "@/services/client/i18n";
 import convert from "@/utils/convert";
 import format from "@/utils/format";
 import { useDisableWheelScroll } from "@/hooks/use-disable-wheel-scroll";
+import { useSelectOnFocus } from "@/hooks/use-select-on-focus";
 import { useViewContext } from "@/view-containers/views/scope";
 
 import { FieldControl, FieldProps } from "../../builder";
@@ -46,6 +47,7 @@ export function Decimal(props: FieldProps<string | number>) {
   );
 
   const [inputElement, setInputElement] = useDisableWheelScroll();
+  const selectOnFocus = useSelectOnFocus();
   const timerRef = useRef<number>(undefined);
 
   const parse = useCallback(
@@ -235,6 +237,7 @@ export function Decimal(props: FieldProps<string | number>) {
             onChange={onChange}
             onBlur={onBlur}
             onKeyDown={handleKeyDown}
+            {...selectOnFocus}
           />
           <div
             className={clsx(styles.buttons, {

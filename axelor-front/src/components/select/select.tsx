@@ -272,6 +272,7 @@ function SelectInner<Type, Multiple extends boolean>(
       key={autoFocus ? "focused" : "normal"}
       clearOnBlur
       clearOnEscape
+      selectOnFocus
       {...selectProps}
       ref={combinedRef}
       value={value}

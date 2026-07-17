@@ -6,6 +6,7 @@ import { moment } from "@/services/client/l10n";
 import { FieldControl, FieldProps } from "../../builder";
 import { useInput } from "../../builder/hooks";
 import { MaskedInput } from "@/components/masked-input";
+import { useSelectOnFocus } from "@/hooks/use-select-on-focus";
 import { ViewerInput } from "../string/viewer";
 
 function toText(
@@ -65,6 +66,7 @@ export function Duration(props: FieldProps<string | number>) {
   const { focus, required } = attrs;
 
   const id = useId();
+  const selectOnFocus = useSelectOnFocus();
 
   const format = useCallback(
     (value?: string | number | null) => toText(value, { big, seconds }),
@@ -128,6 +130,7 @@ export function Duration(props: FieldProps<string | number>) {
           onBlur={handleBlur}
           onKeyDown={onKeyDown}
           mask={mask}
+          {...selectOnFocus}
         />
       )}
     </FieldControl>

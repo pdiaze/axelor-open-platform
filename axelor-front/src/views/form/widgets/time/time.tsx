@@ -7,6 +7,7 @@ import format from "@/utils/format";
 import { FieldControl, FieldProps } from "../../builder";
 import { useInput } from "../../builder/hooks";
 import { MaskedInput } from "@/components/masked-input";
+import { useSelectOnFocus } from "@/hooks/use-select-on-focus";
 import { ViewerInput } from "../string/viewer";
 
 const isValid = (value: string) => !value.includes("_");
@@ -20,6 +21,7 @@ export function Time(props: FieldProps<string | number>) {
   const { focus, required } = attrs;
 
   const id = useId();
+  const selectOnFocus = useSelectOnFocus();
 
   const formatValue = useCallback(
     (value?: string | number | null) =>
@@ -69,6 +71,7 @@ export function Time(props: FieldProps<string | number>) {
           onBlur={onBlur}
           onKeyDown={onKeyDown}
           mask={toMask}
+          {...selectOnFocus}
         />
       )}
     </FieldControl>

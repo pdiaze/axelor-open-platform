@@ -2,6 +2,7 @@ import { useAtomValue } from "jotai";
 import { useCallback } from "react";
 
 import { MaskedInput } from "@/components/masked-input";
+import { useSelectOnFocus } from "@/hooks/use-select-on-focus";
 import { ViewerInput } from "@/views/form/widgets/string/viewer";
 
 import { FieldControl, FieldProps } from "../../builder";
@@ -29,6 +30,7 @@ export function Uuid(props: FieldProps<string>) {
   const { uid, placeholder } = schema;
   const { attrs } = useAtomValue(widgetAtom);
   const { focus, required } = attrs;
+  const selectOnFocus = useSelectOnFocus();
   const { text, setText, onChange, onBlur, onKeyDown } = useInput(valueAtom, {
     validate: isValid,
     schema,
@@ -62,6 +64,7 @@ export function Uuid(props: FieldProps<string>) {
           onBlur={handleBlur}
           onKeyDown={onKeyDown}
           mask={uuidMask}
+          {...selectOnFocus}
         />
       )}
     </FieldControl>
