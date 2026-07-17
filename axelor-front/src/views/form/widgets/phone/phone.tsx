@@ -132,18 +132,25 @@ export function Phone({
 
   const selectedDialCodeRef = useRef<string>(undefined);
 
+  // Avoids feeding usePhoneInput a stale/cleared value that would look
+  // like an external change and reset it mid-typing.
+  const lastPhoneRef = useRef<string>("");
+  const lastEmittedRef = useRef<string | undefined>(undefined);
+
   const handlePhoneChange = useCallback(
     ({ phone, country }: { phone: string; country: ParsedCountry }) => {
+      lastPhoneRef.current = phone;
       if (noPrefix) return;
       const dialCode = `+${country.dialCode}`;
       const selectedDialCode = selectedDialCodeRef.current;
       if (selectedDialCode === phone) {
         selectedDialCodeRef.current = undefined;
       }
+      const emittedValue =
+        phone !== dialCode || selectedDialCode === phone ? phone : "";
+      lastEmittedRef.current = emittedValue;
       onChange({
-        target: {
-          value: phone !== dialCode || selectedDialCode === phone ? phone : "",
-        },
+        target: { value: emittedValue },
       } as ChangeEvent<HTMLInputElement>);
     },
     [noPrefix, onChange],
@@ -170,7 +177,13 @@ export function Phone({
   } = usePhoneInput({
     defaultCountry,
     countries: countries,
-    value: noPrefix ? "" : text,
+    // If `text` matches our last emission, it's our own onChange echoing
+    // back; feed the hook its own phone instead so it sees no change.
+    value: noPrefix
+      ? ""
+      : text === lastEmittedRef.current
+        ? lastPhoneRef.current
+        : text,
     onChange: handlePhoneChange,
     disableDialCodePrefill: true,
   });
