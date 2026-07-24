@@ -78,7 +78,6 @@ export interface GridFormRendererProps extends GridRowProps {
 
 type LayoutProps = Omit<WidgetProps, "widgetAtom"> &
   Pick<GridRowProps, "columns"> & {
-    onSave?: () => void;
     onCancel?: () => void;
   };
 
@@ -92,10 +91,17 @@ const findColumnIndexByNode = (ele: HTMLElement) => {
   return colIndex ? +colIndex : undefined;
 };
 
+export type HandleSaveOptions = {
+  saveFromEdit?: boolean;
+  columnIndex?: number;
+  saveFromAction?: boolean;
+  forceValidate?: boolean;
+};
+
 export type GridFormHandler = {
   formAtom?: FormAtom;
   invalid?: () => null | WidgetErrors[];
-  onSave?: (saveFromEdit?: boolean) => void;
+  onSave?: (options?: HandleSaveOptions) => void;
   onCancel?: () => void;
 };
 
@@ -446,10 +452,7 @@ export const Form = forwardRef<GridFormHandler, GridFormRendererProps>(
     const getErrors = useGetErrors();
 
     const checkInvalid = useAtomCallback(
-      useCallback(
-        (get) => getErrors(get(formAtom)),
-        [formAtom, getErrors],
-      ),
+      useCallback((get) => getErrors(get(formAtom)), [formAtom, getErrors]),
     );
 
     const handleCancel = useCallback(
@@ -470,13 +473,10 @@ export const Form = forwardRef<GridFormHandler, GridFormRendererProps>(
 
     const handleSave = useAtomCallback(
       useCallback(
-        async (
-          get,
-          set,
-          saveFromEdit?: boolean,
-          columnIndex?: number,
-          saveFromAction?: boolean,
-        ) => {
+        async (get, set, options?: HandleSaveOptions) => {
+          const { saveFromEdit, columnIndex, saveFromAction, forceValidate } =
+            options ?? {};
+
           const input = document.activeElement as HTMLInputElement;
           const elem = containerRef.current;
           if (input && elem?.contains(input)) {
@@ -490,15 +490,35 @@ export const Form = forwardRef<GridFormHandler, GridFormRendererProps>(
             await actionExecutor.wait();
           }
 
+          // untouched new row: discard silently, unless explicitly saving (Enter/Ctrl+S/Save)
+          if (!forceValidate && !hasSaved) {
+            const { record: currentRecord, original } = get(formAtom);
+            if (isEqual(currentRecord, original)) {
+              return handleCancel(columnIndex);
+            }
+          }
+
           if (onSaveAction) {
             await actionExecutor.execute(onSaveAction);
           }
 
           const formState = get(formAtom);
 
+          const checkErrors = () => {
+            const errors = getErrors(formState);
+            if (errors) {
+              showErrors(errors);
+              return true;
+            }
+            return false;
+          };
+
           // check record changes
           // if saved record is same then discard the editing
           if (!isRecordSavable()) {
+            if (checkErrors()) {
+              return Promise.reject();
+            }
             return onSave?.(
               record,
               rowIndex,
@@ -508,10 +528,7 @@ export const Form = forwardRef<GridFormHandler, GridFormRendererProps>(
             );
           }
 
-          const errors = getErrors(formState);
-
-          if (errors) {
-            showErrors(errors);
+          if (checkErrors()) {
             return Promise.reject();
           }
 
@@ -547,6 +564,8 @@ export const Form = forwardRef<GridFormHandler, GridFormRendererProps>(
           cellIndex,
           isTreeGrid,
           isRecordSavable,
+          hasSaved,
+          handleCancel,
         ],
       ),
     );
@@ -554,7 +573,7 @@ export const Form = forwardRef<GridFormHandler, GridFormRendererProps>(
     const handleRecordCommit = useAtomCallback(
       useCallback(
         (get, set) => {
-          const { record, original } = get(formAtom);
+          const { record } = get(formAtom);
 
           if (isEqual(record, recordRef.current)) {
             return;
@@ -562,13 +581,9 @@ export const Form = forwardRef<GridFormHandler, GridFormRendererProps>(
 
           recordRef.current = record;
 
-          // check if not changed then discard it.
-          if (isEqual(record, original)) {
-            return handleCancel();
-          }
-          return handleSave(true);
+          return handleSave({ saveFromEdit: true });
         },
-        [formAtom, handleSave, handleCancel],
+        [formAtom, handleSave],
       ),
     );
 
@@ -577,7 +592,13 @@ export const Form = forwardRef<GridFormHandler, GridFormRendererProps>(
         parentActionHandler.refresh.bind(parentActionHandler),
       );
       actionHandler.setSaveHandler(async () => {
-        await executeWithoutQueue(() => handleSave(true, undefined, true));
+        await executeWithoutQueue(() =>
+          handleSave({
+            saveFromEdit: true,
+            saveFromAction: true,
+            forceValidate: true,
+          }),
+        );
         return parentActionHandler.save.bind(parentActionHandler)();
       });
     }, [actionHandler, parentActionHandler, handleSave]);
@@ -605,12 +626,14 @@ export const Form = forwardRef<GridFormHandler, GridFormRendererProps>(
           if (e.key === `Enter`) {
             const shouldAddSubLine = e.ctrlKey && onAddSubLine;
             const savable = isRecordSavable();
-            return handleSave?.(
-              (!autoAddNewRow && savable) || expand || shouldAddSubLine
-                ? true
-                : undefined,
-              findColumnIndexByNode(e.target as HTMLElement),
-            ).then(async () => {
+            return handleSave?.({
+              saveFromEdit:
+                (!autoAddNewRow && savable) || expand || shouldAddSubLine
+                  ? true
+                  : undefined,
+              columnIndex: findColumnIndexByNode(e.target as HTMLElement),
+              forceValidate: true,
+            }).then(async () => {
               if (shouldAddSubLine) {
                 if (!isNew || autoAddNewRow) {
                   !expand && (await handleExpand());
@@ -686,12 +709,11 @@ export const Form = forwardRef<GridFormHandler, GridFormRendererProps>(
           expandState={expandState}
           onCellClick={handleCellClick}
           onExpand={handleExpand}
-          onSave={handleSave}
           onCancel={handleCancel}
         />
       ),
       // eslint-disable-next-line react-hooks/exhaustive-deps
-      [expandState, handleSave, handleCancel],
+      [expandState, handleCancel],
     );
 
     useImperativeHandle(ref, () => {
@@ -740,7 +762,7 @@ export const Form = forwardRef<GridFormHandler, GridFormRendererProps>(
       }),
       [handleDatePickerOpen, handleDatePickerClose],
     );
-    
+
     return (
       <>
         {!(view as Schema).serverType && (
@@ -785,17 +807,14 @@ export const Form = forwardRef<GridFormHandler, GridFormRendererProps>(
 function MainShortcuts({
   handleSave,
 }: {
-  handleSave?: (
-    saveFromEdit?: boolean,
-    columnIndex?: number,
-  ) => Promise<unknown>;
+  handleSave?: (options?: HandleSaveOptions) => Promise<unknown>;
 }) {
   useTabShortcut({
     key: "s",
     ctrlKey: true,
     action: useCallback(() => {
       void (async () => {
-        await handleSave?.();
+        await handleSave?.({ forceValidate: true });
       })();
     }, [handleSave]),
   });

@@ -454,7 +454,7 @@ export const Grid = forwardRef<
     // save current edit row
     const form = formRef.current;
     if (form) {
-      return await form?.onSave?.(true);
+      return await form?.onSave?.({ saveFromEdit: true });
     }
 
     if (commitTreeForm) {
