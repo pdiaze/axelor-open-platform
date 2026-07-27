@@ -1,7 +1,7 @@
 import { Dayjs, ManipulateType, OpUnitType } from "dayjs";
 import { Field, GridView } from "@/services/client/meta.types";
 import { SearchState } from "./types";
-import { Criteria, Filter, FilterOp } from "@/services/client/data.types";
+import { Criteria, Filter } from "@/services/client/data.types";
 import { toKebabCase } from "@/utils/names";
 import { moment } from "@/services/client/l10n";
 import * as FormatUtils from "@/utils/format";
@@ -82,16 +82,7 @@ function toMoment(val: string, field: Field) {
     granularity = "second";
   }
 
-  // dayjs (unlike moment) requires MM/DD to match exactly 2 digits, so
-  // relax them to M/D to accept single-digit user input like "6/2026".
-  const parseFormat = format.replace(/MM/g, "M").replace(/DD/g, "D");
-
-  return [
-    val ? moment(val, parseFormat) : moment(),
-    granularity,
-    operator,
-    parseFormat,
-  ];
+  return [val ? moment(val, format) : moment(), granularity, operator];
 }
 
 function toTimeMoment(val: any, field: Field) {
@@ -104,225 +95,155 @@ function toTimeMoment(val: any, field: Field) {
     format = getTimeFormat({ seconds: true } as Field);
     granularity = "second";
   }
-  return [val ? moment(val, format) : moment(), granularity, undefined, format];
-}
-
-// dayjs silently truncates unmatched trailing digits instead of rejecting
-// them (e.g. "4239374231" parses as the year 4239), so a value that looks
-// valid to dayjs must also round-trip back to the same digits to be
-// accepted.
-function digitsMatch(input: string, formatted?: string) {
-  const a = (`${input}`.match(/\d+/g) || []).map(Number);
-  const b = (`${formatted ?? ""}`.match(/\d+/g) || []).map(Number);
-  return a.length === b.length && a.every((n, i) => n === b[i]);
-}
-
-// dayjs also happily parses a date out of a string that merely contains a
-// digit run somewhere in it (e.g. "2026kfjhkdshfksdhfk" or a leading
-// garbage prefix), ignoring stray non-separator characters entirely. A
-// real date/time entry should only contain digits and typical separators.
-const DATE_VALUE_CHARS = /^[\d\s/.:,-]*$/;
-
-function isValidDateValue(input: string, formatted?: string) {
-  return DATE_VALUE_CHARS.test(`${input}`) && digitsMatch(input, formatted);
-}
-
-/**
- * Builds the search criteria for a single field, or `null` if the entered
- * value can't be parsed as the field's type (e.g. an unparseable date or a
- * non-numeric value on a number field). Callers should treat `null` as "no
- * criteria for this field" rather than generating a criteria with a bogus
- * value.
- */
-export function getFilterCriteria(
-  field: Field,
-  value: any,
-): Filter | Criteria | null {
-  let type = toKebabCase(field.type || "");
-  let op: FilterOp = "like";
-  let options = {};
-  let invalid = false;
-  if (field.selection) {
-    type = "selection";
-  }
-
-  switch (type) {
-    case "decimal":
-    case "number":
-    case "long":
-    case "integer":
-      options = stripOperator(value, field, (value) => {
-        if (`${value}`.trim() !== "" && isNaN(value)) {
-          invalid = true;
-          return 0;
-        }
-        return Number(value);
-      });
-      break;
-    case "boolean":
-      op = "=";
-      value = !/f|n|false|no|0/.test(value);
-      break;
-    case "many-to-many":
-    case "one-to-many":
-      if (value?.includes?.(" | ")) {
-        return {
-          operator: "or",
-          criteria: value
-            .split(" | ")
-            .filter((v: string) => v.trim())
-            .map((value: string) => ({
-              fieldName: field.name,
-              operator: "like",
-              value,
-            })),
-        };
-      }
-      break;
-    case "time":
-    case "date":
-    case "datetime": {
-      const mappers = {
-        time: (v?: Dayjs) =>
-          v && v.format(getTimeFormat({ seconds: true } as Field)),
-        date: (v?: Dayjs) => v && v.format("YYYY-MM-DD"),
-        datetime: (v?: Dayjs) => {
-          const d: any = v && v.toDate();
-          return d && !isNaN(d) && d instanceof Date ? d.toISOString() : null;
-        },
-      };
-      const toValue = mappers[type];
-      const {
-        operator: _operator,
-        value: _value,
-        value2,
-      } = stripOperator(value, field);
-      const [$value, granularity, $operator, parseFormat] = (
-        type === "time" ? toTimeMoment : toMoment
-      )(_value, field) as [Dayjs, OpUnitType, Filter["operator"], string];
-      if (
-        $value &&
-        (!$value.isValid() ||
-          (`${_value}`.trim() !== "" &&
-            !isValidDateValue(_value, $value.format(parseFormat))))
-      ) {
-        invalid = true;
-        break;
-      }
-      if ($value) {
-        const $op = _operator === $operator ? $operator : _operator;
-        switch ($op) {
-          case "<":
-          case ">=":
-            op = $op;
-            value = toValue(moment($value).startOf(granularity));
-            break;
-          case ">":
-            op = ">=";
-            value = toValue(getNextOf(moment($value), granularity));
-            break;
-          case "<=":
-            op = "<";
-            value = toValue(getNextOf(moment($value), granularity));
-            break;
-          case "=":
-          case "!=":
-          case "between":
-          case "notBetween": {
-            const hasNot = $op === "!=";
-            let $v1: any = $value;
-            let $v2: any;
-
-            if (value2) {
-              const [v2Value, , , v2Format] = toMoment(value2, field) as [
-                Dayjs,
-                OpUnitType,
-                Filter["operator"],
-                string,
-              ];
-              if (
-                !v2Value.isValid() ||
-                !isValidDateValue(value2, v2Value.format(v2Format))
-              ) {
-                invalid = true;
-                break;
-              }
-              $v2 = v2Value;
-            } else {
-              $v2 = $v1.clone();
-            }
-
-            if ($v1 > $v2 && !hasNot) {
-              [$v1, $v2] = [$v2, $v1];
-            }
-
-            $v1 = toValue($v1.startOf(granularity));
-            $v2 = toValue(getNextOf($v2, granularity));
-
-            return {
-              operator: hasNot ? "or" : "and",
-              criteria: [
-                {
-                  fieldName: field.name,
-                  operator: hasNot ? "<" : ">=",
-                  value: $v1,
-                },
-                {
-                  fieldName: field.name,
-                  operator: hasNot ? ">=" : "<",
-                  value: $v2,
-                },
-              ],
-            };
-          }
-        }
-      }
-      break;
-    }
-    case "uuid":
-    case "enum":
-    case "selection":
-      if (!(field.widget || "").toLowerCase().startsWith("multi")) {
-        op = "=";
-      }
-      break;
-  }
-
-  if (invalid) {
-    return null;
-  }
-
-  return {
-    fieldName: field.name,
-    value,
-    operator: op,
-    ...options,
-  };
+  return [val ? moment(val, format) : moment(), granularity];
 }
 
 function getSearchCriteria(
   fields: Record<string, Field>,
   items: GridView["items"],
   values: SearchState,
-): (Filter | Criteria)[] {
+): Filter[] {
+
+  const getFilterCriteria = (_field: Field, value: any) => {
+    const item = (items || []).find((item) => item?.name === _field?.name);
+    const field = { ...item, ..._field, widget: item?.widget ?? _field.widget } as Field;
+    let type = toKebabCase(field.type || "");
+    let op = "like";
+    let options = {};
+    if (field.selection) {
+      type = "selection";
+    }
+
+    switch (type) {
+      case "decimal":
+      case "number":
+      case "long":
+      case "integer":
+        options = stripOperator(value, field, (value) => {
+          return isNaN(value) ? 0 : Number(value);
+        });
+        break;
+      case "boolean":
+        op = "=";
+        value = !/f|n|false|no|0/.test(value);
+        break;
+      case "many-to-many":
+      case "one-to-many":
+        if (value?.includes?.(" | ")) {
+          return {
+            operator: "or",
+            criteria: value
+              .split(" | ")
+              .filter((v: string) => v.trim())
+              .map((value: string) => ({
+                fieldName: field.name,
+                operator: "like",
+                value,
+              })),
+          };
+        }
+        break;
+      case "time":
+      case "date":
+      case "datetime": {
+        const mappers = {
+          time: (v?: Dayjs) =>
+            v && v.format(getTimeFormat({ seconds: true } as Field)),
+          date: (v?: Dayjs) => v && v.format("YYYY-MM-DD"),
+          datetime: (v?: Dayjs) => {
+            const d: any = v && v.toDate();
+            return d && !isNaN(d) && d instanceof Date ? d.toISOString() : null;
+          },
+        };
+        const toValue = mappers[type];
+        const {
+          operator: _operator,
+          value: _value,
+          value2,
+        } = stripOperator(value, field);
+        const [$value, granularity, $operator] = (
+          type === "time" ? toTimeMoment : toMoment
+        )(_value, field) as [Dayjs, OpUnitType, Filter["operator"]];
+        if ($value) {
+          const $op = _operator === $operator ? $operator : _operator;
+          switch ($op) {
+            case "<":
+            case ">=":
+              op = $op;
+              value = toValue(moment($value).startOf(granularity));
+              break;
+            case ">":
+              op = ">=";
+              value = toValue(getNextOf(moment($value), granularity));
+              break;
+            case "<=":
+              op = "<";
+              value = toValue(getNextOf(moment($value), granularity));
+              break;
+            case "=":
+            case "!=":
+            case "between":
+            case "notBetween": {
+              const hasNot = $op === "!=";
+              let $v1: any = $value;
+              let $v2: any = (
+                value2 ? toMoment(value2, field)[0] : $v1.clone()
+              ) as Dayjs;
+
+              if ($v1 > $v2 && !hasNot) {
+                [$v1, $v2] = [$v2, $v1];
+              }
+
+              $v1 = toValue($v1.startOf(granularity));
+              $v2 = toValue(getNextOf($v2, granularity));
+
+              return {
+                operator: hasNot ? "or" : "and",
+                criteria: [
+                  {
+                    fieldName: field.name,
+                    operator: hasNot ? "<" : ">=",
+                    value: $v1,
+                  },
+                  {
+                    fieldName: field.name,
+                    operator: hasNot ? ">=" : "<",
+                    value: $v2,
+                  },
+                ],
+              };
+            }
+          }
+        }
+        break;
+      }
+      case "uuid":
+      case "enum":
+      case "selection":
+        if (!(field.widget || "").toLowerCase().startsWith("multi")) {
+          op = "=";
+        }
+        break;
+    }
+    return {
+      fieldName: field.name,
+      value,
+      operator: op,
+      ...options,
+    };
+  };
+
   const getFilterValue = (name: string, value: any) => {
     const field = { ...(fields[name] || { name }) };
     if (toKebabCase(field.type) === "many-to-one") {
       field.name = `${name}.${field.targetName}`;
     }
-    const item = (items || []).find((item) => item?.name === field?.name);
-    const mergedField = {
-      ...item,
-      ...field,
-      widget: item?.widget ?? field.widget,
-    } as Field;
-    return getFilterCriteria(mergedField, value);
+    return getFilterCriteria(field, value) as Filter;
   };
 
   return Object.keys(values)
     .filter((x) => values[x])
-    .map((key) => getFilterValue(key, values[key]))
-    .filter((filter): filter is Filter | Criteria => filter !== null);
+    .map((key) => getFilterValue(key, values[key]));
 }
 
 export function getSearchFilter(
