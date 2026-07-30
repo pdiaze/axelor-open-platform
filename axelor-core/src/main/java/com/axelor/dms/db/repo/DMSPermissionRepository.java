@@ -16,6 +16,7 @@ import com.axelor.db.internal.DBHelper;
 import com.axelor.dms.db.DMSFile;
 import com.axelor.dms.db.DMSPermission;
 import com.axelor.i18n.I18n;
+import com.axelor.inject.Beans;
 import com.google.common.collect.Lists;
 import jakarta.inject.Inject;
 import jakarta.persistence.PersistenceException;
@@ -31,10 +32,13 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
+import org.apache.shiro.authz.UnauthorizedException;
 
 public class DMSPermissionRepository extends JpaRepository<DMSPermission> {
 
   @Inject private PermissionRepository perms;
+
+  private DMSFileRepository dmsFiles;
 
   private final ExecutorService executor = Executors.newSingleThreadExecutor();
 
@@ -75,6 +79,52 @@ public class DMSPermissionRepository extends JpaRepository<DMSPermission> {
     permission.setCanWrite(false);
     permission.setCanRemove(false);
     return permission;
+  }
+
+  /**
+   * Checks that the current user is allowed to manage the permissions of the file the given
+   * permission belongs to.
+   *
+   * @param json the permission values to validate
+   * @param context the context
+   * @return validated json map
+   * @throws UnauthorizedException if the current user can't share the file
+   */
+  @Override
+  public Map<String, Object> validate(Map<String, Object> json, Map<String, Object> context) {
+    DMSFile file = findFile(json);
+    if (!getDmsFiles().canShare(file)) {
+      throw new UnauthorizedException(I18n.get("You are not authorized to perform this action."));
+    }
+    return super.validate(json, context);
+  }
+
+  /** Finds the file the given permission values are about from the given {@code file} value. */
+  private DMSFile findFile(Map<String, Object> json) {
+    if (json == null) {
+      return null;
+    }
+
+    if (json.get("file") instanceof Map<?, ?> fileMap) {
+      Long fileId = findId(fileMap.get("id"));
+      if (fileId != null) {
+        return getDmsFiles().find(fileId);
+      }
+    }
+
+    return null;
+  }
+
+  private DMSFileRepository getDmsFiles() {
+    if (dmsFiles == null) {
+      dmsFiles = Beans.get(DMSFileRepository.class);
+    }
+    return dmsFiles;
+  }
+
+  private Long findId(Object value) {
+    Long id = value != null ? Long.valueOf(value.toString()) : null;
+    return id != null && id > 0 ? id : null;
   }
 
   @Override
