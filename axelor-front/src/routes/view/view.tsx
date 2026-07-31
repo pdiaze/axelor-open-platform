@@ -1,6 +1,11 @@
 import { atom, useAtomValue } from "jotai";
 import { useEffect, useCallback, useMemo, useRef } from "react";
-import { generatePath, useParams, useSearchParams } from "react-router";
+import {
+  generatePath,
+  useLocation,
+  useParams,
+  useSearchParams,
+} from "react-router";
 import { useAtomCallback } from "jotai/utils";
 import { produce } from "immer";
 
@@ -28,6 +33,9 @@ const noTabAtom: TabAtom = atom({}) as unknown as TabAtom;
 
 const queue = new TaskQueue();
 
+// id stamped on each redirect issued below, to tell them apart from user navigation
+let selfRedirectId = 0;
+
 export function View() {
   const params = useParams();
   const tabs = useTabs();
@@ -43,10 +51,13 @@ export function View() {
 
   const { redirect, location } = useRoute();
   const [searchParams] = useSearchParams();
+  const { state: locationState } = useLocation();
 
   const pathRef = useRef<string>(null);
   const tabPathRef = useRef<string>(null);
-  const actionRef = useRef<string>('');
+  const actionRef = useRef<string>("");
+  // id of the last redirect we issued, still waiting to come back through `params`
+  const selfRedirectIdRef = useRef<number>(null);
   const qsRef = useRef<Record<string, Record<string, string>>>({});
   const homeAction = session.info?.user?.action;
 
@@ -88,7 +99,22 @@ export function View() {
     const tabPath = getURL(tabAction, tabMode, tabId);
     const path = getURL(action, mode, id);
 
-    if (action && path && pathRef.current !== path) {
+    // is this `params` change the echo of our own redirect below? if so the URL is
+    // merely catching up with a tab we already have, so record the path but skip
+    // the open, which would re-activate that tab and steal focus from a new one
+    const redirectId = (locationState as { selfRedirectId?: number } | null)
+      ?.selfRedirectId;
+    const isSelfRedirect =
+      redirectId != null && redirectId === selfRedirectIdRef.current;
+
+    if (isSelfRedirect) {
+      // consume it: the id stays on the history entry, so going back to it later
+      // has to count as a real navigation
+      selfRedirectIdRef.current = null;
+      pathRef.current = path;
+    }
+
+    if (action && path && pathRef.current !== path && !isSelfRedirect) {
       pathRef.current = path;
       queue.add(() =>
         tabs.open(action, {
@@ -103,12 +129,19 @@ export function View() {
       tabPathRef.current !== tabPath
     ) {
       tabPathRef.current = tabPath;
-      redirect(tabPath, {}, tabQueryString);
+      // the active tab moved, so bring the URL along -- tagged, so that the
+      // `params` change it triggers is not mistaken for a user navigation
+      const nextId = ++selfRedirectId;
+      selfRedirectIdRef.current = nextId;
+      redirect(tabPath, {}, tabQueryString, {
+        state: { selfRedirectId: nextId },
+      });
     } else if (tabs.items.length === 0) {
       pathRef.current = null;
       tabPathRef.current = null;
+      selfRedirectIdRef.current = null;
     }
-  }, [homeAction, params, redirect, tabParams, tabs]);
+  }, [homeAction, locationState, params, redirect, tabParams, tabs]);
 
   return null;
 }

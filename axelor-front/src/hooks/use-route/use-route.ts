@@ -15,19 +15,25 @@ export function useRoute() {
     (
       path: string,
       params?: Record<string, string | null>,
-      query?: Record<string, string>
+      query?: Record<string, string>,
+      // `state` is attached to the history entry, letting the caller label a
+      // navigation it issued itself and recognise it when it comes back
+      options?: { state?: unknown },
     ) => {
       let pathname = generatePath(path, params);
       let search = createSearchParams(query).toString();
       const current = refs.current.location;
       if (current.pathname !== pathname || current.search !== search) {
-        refs.current.navigate({
-          pathname,
-          search,
-        });
+        refs.current.navigate(
+          {
+            pathname,
+            search,
+          },
+          options,
+        );
       }
     },
-    []
+    [],
   );
 
   useEffect(() => {
