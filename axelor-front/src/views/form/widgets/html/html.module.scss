@@ -18,11 +18,13 @@
 
 .translate {
   position: absolute;
-  top: 0.25rem;
+  padding-right: 0.25rem;
   right: 0;
   [dir="rtl"] & {
     right: unset;
     left: 0;
+    padding-left: 0.25rem;
+    padding-right: unset;
   }
 }
 
