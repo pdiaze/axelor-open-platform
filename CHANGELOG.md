@@ -1,3 +1,269 @@
+## 8.2.3 (2026-08-06)
+
+#### Feature
+
+* Select field content on focus for input widgets
+
+  <details>
+  
+  Numeric (integer, long, decimal), duration, date/datetime/time, uuid,
+  selection, and many-to-one fields now automatically select their entire
+  content when the field receives focus — whether via Tab or a mouse click.
+  A second click on an already-focused field places the cursor normally
+  without forcing reselection.
+  
+  String fields are excluded, since users editing text most often just want
+  to fix a typo rather than replace the whole value.
+  
+  </details>
+
+* Add national phone number placeholder flag for phone widget
+
+  <details>
+  
+  Phone numbers stored without a country prefix (national format, legacy data) now
+  display an "XX" placeholder flag — a rounded rectangle with two diagonal crossing
+  lines — instead of the default locale country flag, making it clear that the
+  country is unspecified.
+  
+  The flag uses theme CSS variables so it renders correctly in both light and dark
+  mode. Selecting any country from the dropdown while in XX mode exits national
+  format and converts the value to international format.
+  
+  </details>
+
+#### Change
+
+* Upgrade backend dependencies
+
+  <details>
+  
+  Here is the list of backend dependencies upgraded :
+  
+  - Upgrade Jackson from 2.21.4 to 2.21.5
+  - Upgrade Tomcat from 10.1.55 to 10.1.57
+  - Upgrade Logback from 1.5.34 to 1.5.38
+  - Upgrade PostgreSQL driver from 42.7.11 to 42.7.13
+  
+  </details>
+
+* Disable L2 cache for volatile mail entities
+
+  <details>
+  
+  `MailMessage`, `MailFlags` and `MailFollower` are no longer second-level
+  cacheable. These entities are either fast-growing and reached via scattered
+  queries (`MailMessage`) or hold per-user state (`MailFlags`, `MailFollower`),
+  so the entity cache had a near-zero hit ratio while adding memory and
+  invalidation overhead.
+  
+  </details>
+
+#### Fix
+
+* Fix one-to-many onChange firing on its own when canMove is enabled
+
+  <details>
+  
+  When a one-to-many field had `canMove="true"` (a valid sequence/order field),
+  its `onChange` handler could fire on its own, without any user interaction with
+  the grid, whenever the field's value was refreshed (e.g. after a save, a
+  version change, or any action pushing updated items back to the client) while
+  the stored sequence values did not already match the contiguous order the
+  widget recomputes.
+  
+  The internal reordering reconciliation now updates the sequence field without
+  triggering `onChange` or marking the record dirty, consistent with the other
+  internal writes in the widget.
+  
+  </details>
+
+* Fix grid pagination allowing the per-page limit to be bypassed
+
+  <details>
+  
+  In a grid view, editing the page size field and decreasing it below 1 (for
+  example to a negative value using the number input's down arrow) was not
+  rejected, letting the grid load records without respecting the configured
+  maximum number of records per page. The entered page size is now validated
+  against the configured maximum: a value above the maximum is capped to it and
+  a non-positive value falls back to the default page size. When no maximum is
+  configured, any positive value is allowed, so a large value can be entered to
+  fetch all records.
+  
+  </details>
+
+* Fix incorrect country flags in phone widget
+
+  <details>
+  
+  Corrected some country flags that were outdated or incorrect:
+  
+  * France: fixed the flag colors.
+  * Martinique: replaced the obsolete flag with the current one.
+  * Malaysia: fixed the number of stripes.
+  * Syria: updated to the current national flag.
+  
+  </details>
+
+* Fix Monaco Editor when redirecting from /index.html
+
+  <details>
+  
+  When deployed with a context path (e.g. `/axelor-erp`), the CodeEditor widget
+  failed to load Monaco assets because `location.pathname` included `/index.html`
+  after the auth redirect, producing a wrong base URL for the Monaco loader.
+  
+  Fixed by changing login URL from `/index.html` to `/`.
+  As a failsafe measure in case the `index.html` endpoint is still used,
+  the Monaco base URL computation now also strips `/index.html`
+  from `location.pathname` if present.
+  
+  </details>
+
+* Fix MetaModule data not refreshed when restoring views
+* Fix phone widget marking record dirty on focus without changes
+
+  <details>
+  
+  Focusing a phone field and immediately blurring it (without typing anything)
+  incorrectly marked the record as dirty.
+  
+  </details>
+
+* Compact M2M field items in action context and save requests
+
+  <details>
+  
+  When a many-to-many field held full record objects (e.g. filled by an action
+  with records fetched from a repository), all their fields were re-sent on
+  every subsequent save or action call. The server then attempted to update
+  the linked records themselves, which could fail with unexpected permission
+  errors.
+  
+  Saved many-to-many items are now sent as plain references (id, version and
+  the display name), whether the field belongs to the model or is only defined
+  in the view. New (unsaved) items are still sent in full so they can be
+  created. One-to-many fields are not affected.
+  
+  The same compaction is applied when an editable grid row is committed or a
+  record is saved from a popup editor, so many-to-many values filled by
+  actions there no longer carry updates into later saves of the parent record.
+  
+  </details>
+
+* Clear meta caches after database update/init
+
+  <details>
+  
+  The `database update`/`init` CLI commands now invalidate the meta caches
+  (actions, translations, ...) once modules have been loaded. Previously, when a
+  distributed cache was shared with a running instance, the loaded changes were
+  not reflected until the instance was restarted.
+  
+  </details>
+
+* Fetch missing relation fields via selector and editor popups
+
+  <details>
+  
+  When selecting a record from a selector popup or saving via an editor popup
+  in M2O, M2M (tags), or M2M/O2M collection grid widgets, fields required for
+  display (e.g. target-name, colorField, computed grid columns) that were not
+  present in the popup's grid or form view could be missing, causing values to
+  disappear until the page was refreshed.
+  
+  Records returned from these popups now always include the fields the widget
+  needs for display, so values no longer disappear after selecting or saving
+  a record.
+  
+  </details>
+
+* Fix form tab focus steal
+
+  <details>
+  
+  When a form button ran `save,<action-open-in-tab>` on a new record,
+  the newly opened tab immediately lost focus and the original form tab
+  was re-activated.
+  
+  When the view detects the active tab's path changed, it checks if the change
+  was caused by an internal tab-state redirect. If so, it does not re-queue a
+  `tabs.open` for the same path.
+  
+  </details>
+
+* Fix multiple line selection in grid on macOS
+
+  <details>
+  
+  Selecting multiple lines in the grid did not work on macOS because the
+  keyboard event was mapped to the wrong modifier key. The correct key is now
+  used so that range/multi-selection works consistently across platforms.
+  
+  </details>
+
+* Fix validIf state being overridden by other field updates
+
+  <details>
+  
+  A field marked invalid through `validIf` could silently go back to looking
+  valid, even though nothing about that field itself changed. This happened
+  whenever another field elsewhere on the same form reacted to the same
+  change, for example by showing or hiding itself. As a result, an invalid
+  value could go unnoticed, and saving the record could also fail with an
+  unexpected error.
+  
+  </details>
+
+* Fix add sub-item button shown when canNew is false
+
+  <details>
+  
+  In a tree grid, the sub-tree header (holding the title and the "add sub-item"
+  button) was still displayed for empty nodes even when `canNew` was false,
+  letting users trigger record creation that was not permitted.
+  
+  </details>
+
+* Fix panel header color not applied to title text
+* Fix JSON model fields not showing in selector popup grid
+
+  <details>
+  
+  When opening a selector popup for a JSON model (M2O, M2M tags, or M2M/O2M
+  collection grid), the grid view was missing its JSON model fields, causing
+  all custom field columns to appear empty.
+  
+  The selector popup grid now correctly resolves the JSON model, so custom
+  fields display as expected.
+  
+  </details>
+
+* Fix grid date search not matching single-digit month or day
+
+  <details>
+  
+  Typing a date filter with a single-digit month or day in a grid column
+  search (e.g. `6/2026` for June 2026) produced no results. This was caused
+  by dayjs requiring exactly two digits for `MM`/`DD` format tokens, unlike
+  moment.js which accepted a single digit.
+  
+  </details>
+
+* Fix phone widget country dropdown dark mode
+
+  <details>
+  
+  The country selector dropdown had hardcoded light-mode styles (white background,
+  whitesmoke hover) that made it unusable in dark mode.
+  
+  The dropdown now uses theme CSS variables so it adapts automatically to the
+  active theme.
+  
+  </details>
+
+
 ## 8.2.2 (2026-06-18)
 
 #### Feature

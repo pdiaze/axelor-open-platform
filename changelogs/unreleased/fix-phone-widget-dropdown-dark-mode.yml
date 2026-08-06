@@ -1,9 +1,0 @@
----
-title: Fix phone widget country dropdown dark mode
-type: fix
-description: |
-  The country selector dropdown had hardcoded light-mode styles (white background,
-  whitesmoke hover) that made it unusable in dark mode.
-
-  The dropdown now uses theme CSS variables so it adapts automatically to the
-  active theme.

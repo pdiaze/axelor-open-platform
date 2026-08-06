@@ -1,6 +1,0 @@
----
-title: Fix phone widget marking record dirty on focus without changes
-type: fix
-description: |
-  Focusing a phone field and immediately blurring it (without typing anything)
-  incorrectly marked the record as dirty.
